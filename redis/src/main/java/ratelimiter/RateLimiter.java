@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.time.Instant;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Transaction;
 
 public class RateLimiter {
 
@@ -22,8 +23,18 @@ public class RateLimiter {
   }
 
   public boolean pass() {
-    // TODO: Implementation
-    return false;
+    long currentTime = System.currentTimeMillis();
+    long timeWindow = currentTime - timeWindowSeconds*1000;
+    long count = redis.zcount(label, timeWindow, currentTime);
+    if (count < maxRequestCount) {
+      Transaction transaction = redis.multi();
+      transaction.zadd(label, currentTime, Long.toString(currentTime));
+      transaction.expire(label, timeWindowSeconds);
+      transaction.exec();
+      return true;
+    }
+    else
+      return false;
   }
 
   public static void main(String[] args) {
